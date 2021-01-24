@@ -1,0 +1,9 @@
+*
+
+!data/
+!src/
+
+!*.py
+!*.ods
+!.gitignore
+!requirements.txt
