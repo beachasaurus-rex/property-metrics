@@ -2,6 +2,49 @@ from enum import Enum
 from datetime import date
 from sqlite3 import connect
 
+class Metrics:
+    def __init__(self,
+        monthly_utility_bill = 0,
+        monthly_property_tax = 0,
+        monthly_mortgage = 0,
+        monthly_condo_fee = 0,
+        property_score = 0
+    ):
+        self.monthly_utility_bill = monthly_utility_bill
+        self.monthly_property_tax = monthly_property_tax
+        self.monthly_mortgage = monthly_mortgage
+        self.monthly_condo_fee = monthly_condo_fee
+        self.property_score = property_score
+        self.monthly_expense_score = 0
+        self.work_distance_score = 0
+        self.area_score = 0
+        self.bed_score = 0
+        self.bath_score = 0
+        self.has_unit_laundry = False
+        self.has_gas_fireplace = False
+        self.has_wood_fireplace = False
+        self.has_trash_collection = False
+        self.hasrange = False
+        self.has_fridge = False
+        self.has_water_softener = False
+    
+    def get_monthly_expenses(self):
+        return self.monthly_utility_bill + \
+        self.monthly_property_tax + self.monthly_mortgage + \
+        self.monthly_condo_fee
+
+    def get_ratio_utility_bills(self):
+        return self.monthly_utility_bill / self.get_monthly_expenses()
+    
+    def get_ratio_property_tax(self):
+        return self.monthly_property_tax / self.get_monthly_expenses()
+
+    def get_ratio_mortgage(self):
+        return self.monthly_mortgage / self.get_monthly_expenses()
+
+    def get_ratio_condo_fee(self):
+        return self.monthly_condo_fee / self.get_monthly_expenses()
+
 class ListingStatus(Enum):
     S = 0
     A = 1
@@ -11,6 +54,13 @@ class ListingStatus(Enum):
 class GarageType(Enum):
     detached = 0
     attached = 1
+
+class UtilityInclusions(Enum):
+    water = 0
+    sewer = 1
+    electricity = 2
+    natural_gas = 3
+    hot_water = 4
 
 class Status:
     def __init__(self,
@@ -38,6 +88,24 @@ class Status:
         self.property_tax = property_tax
         self.tax_year = tax_year
         self.listing_office = listing_office
+
+    def __eq__(self, other):
+        if not(type(other) is Status):
+            return False
+        return int(self.record_id) == int(other.record_id)
+    
+    def __ne__(self, other):
+        return not(self.__eq__(other))
+
+    def __lt__(self, other):
+        if not(type(other) is Status):
+            return False
+        return int(self.record_id) < int(other.record_id)
+
+    def __gt__(self, other):
+        if not(type(other) is Status):
+            return False
+        return int(self.record_id) > int(other.record_id)
 
 class Location:
     def __init__(self,
@@ -110,6 +178,9 @@ class Inclusion:
     ):
         self.inclusion_type = inclusion_type
         self.item = item
+    
+    def __repr__(self):
+        return f"[{self.inclusion_type}:{self.item}]"
 
 class UtilityDetails:
     def __init__(self,
@@ -177,6 +248,7 @@ class InternetProvider:
 
 class Property:
     def __init__(self,
+        pid: str,
         statuses: list,
         location: Location,
         pet_details: PetDetails,
@@ -194,6 +266,7 @@ class Property:
         if not(type(isps[0]) is InternetProvider) \
         and not(isps[0] is None):
             raise TypeError("'isps' must be a list of InternetProvider objects")
+        self.pid = pid
         self.statuses = statuses
         self.location = location
         self.pet_details = pet_details
@@ -202,6 +275,8 @@ class Property:
         self.room_details = room_details
         self.reference = reference
         self.isps = isps
+        self.metrics = Metrics()
+        self.current_status = None
 
 def order_data(dbpath: str):
     #get all property ids
@@ -251,7 +326,7 @@ def order_data(dbpath: str):
         statuses = []
         for raw_status in raw_statuses:
             status = Status(
-                raw_status[1],
+                raw_status[0],
                 raw_status[2],
                 raw_status[3],
                 raw_status[4],
@@ -294,13 +369,15 @@ def order_data(dbpath: str):
             pet_restrictions
         )
 
-        inclusions = []
-        for raw_inc in raw_inclusions:
-            inc = Inclusion(
-                raw_inc[1],
-                raw_inc[2]
-            )
-            inclusions.append(inc)
+        inclusions = None
+        if len(raw_inclusions) > 0:
+            inclusions = []
+            for raw_inc in raw_inclusions:
+                inc = Inclusion(
+                    raw_inc[1],
+                    raw_inc[2]
+                )
+                inclusions.append(inc)
         
         heating_methods = [hm[1] for hm in raw_heating_methods]
         cooling_methods = [cm[1] for cm in raw_cooling_methods]
@@ -354,6 +431,7 @@ def order_data(dbpath: str):
             isps.append(isp)
         
         prop = Property(
+            raw_location[0],
             statuses,
             location,
             pet_details,
@@ -365,3 +443,16 @@ def order_data(dbpath: str):
         )
         props.append(prop)
     return props
+
+def get_current_status(prop: Property):
+    count_statuses = len(prop.statuses)
+    for s in prop.statuses:
+        count_gt = 0
+        for iter_s in prop.statuses:
+            if s == iter_s:
+                continue
+            elif s > iter_s:
+                count_gt += 1
+        if count_gt == count_statuses - 1:
+            prop.current_status = s
+            break

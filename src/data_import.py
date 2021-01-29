@@ -3,30 +3,49 @@ from os import (
     listdir,
     path
 )
-from csv import reader
-from pandas import read_csv
+from csv import (
+    reader,
+    writer
+)
+from pandas import (
+    read_csv,
+    DataFrame
+)
 
 from schema import (
     setup_schema,
     drop_schema
 )
-from data import order_data
+from data import (
+    order_data,
+    ListingStatus,
+    get_current_status
+)
+from plots import make_plots
 
-#imports the data
 dbpath = "./real-estate-data.db"
-setup_schema(dbpath)
-for fname in listdir("../data"):
-    if fname.endswith(".csv"):
-        table_name = path.basename(fname[:-4])
-        fpath = f"../data/{fname}"
-        con = connect(dbpath)
-        df = read_csv(fpath)
-        df.to_sql(table_name, con, if_exists='append', index=False)
-        con.close()
+plot_bin = "../bin"
+csv_dir = "../data"
+try:
+    #imports the data
+    setup_schema(dbpath)
+    for fname in listdir(csv_dir):
+        if fname.endswith(".csv"):
+            table_name = path.basename(fname[:-4])
+            fpath = f"{csv_dir}/{fname}"
+            con = connect(dbpath)
+            df = read_csv(fpath)
+            df.to_sql(table_name, con, if_exists="append", index=False)
+            con.close()
 
-properties = order_data(dbpath)
-print(len(properties))
-print(properties[44].location.total_address)
+    #organize the data into data structures
+    properties = order_data(dbpath)
 
-#database cleanup
-drop_schema(dbpath)
+    #make plots
+    make_plots(properties, plot_bin)
+
+    #database cleanup
+    drop_schema(dbpath)
+except Exception as e:
+    drop_schema(dbpath)
+    raise e
